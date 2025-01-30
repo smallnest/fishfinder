@@ -2,16 +2,13 @@ package main
 
 import (
 	"flag"
-	"runtime"
-	"sync"
 	"time"
 
 	"github.com/kataras/golog"
 )
 
 var (
-	protocol    = flag.String("p", "icmp", "The protocol to use (icmp, tcp or udp)")
-	concurrency = flag.Int("c", runtime.NumCPU(), "The concurrency to send")
+	protocol = flag.String("p", "icmp", "The protocol to use (icmp, tcp or udp)")
 )
 
 // 嵌入ip.sh
@@ -19,16 +16,16 @@ var (
 func main() {
 	flag.Parse()
 
-	var wg sync.WaitGroup
-	wg.Add(*concurrency)
-	scanner := NewICMPScanner(getLocalIP(), *concurrency, &wg)
+	input := make(chan []string, 1024)
+	output := make(chan string, 1024)
+	scanner := NewICMPScanner(input, output)
 
 	var total int
 	var alive int
-	start := time.Now()
+
 	golog.Infof("start scanning")
 
-	input := make(chan []string, 1024)
+	start := time.Now()
 	// 将待探测的IP发送给send goroutine
 	go func() {
 		lines := readIPList()
@@ -41,25 +38,12 @@ func main() {
 	}()
 
 	// 启动 send goroutine
-	output := scanner.Scan(input)
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		time.Sleep(5 * time.Second)
-		close(done)
-	}()
+	scanner.Scan()
 
 	// 接收 send goroutine 发送的结果, 直到发送之后5秒结束
-recv:
-	for {
-		select {
-		case <-done:
-			break recv
-		case ip := <-output:
-			golog.Infof("%s is alive", ip)
-			alive++
-		}
+	for ip := range output {
+		golog.Infof("%s is alive", ip)
+		alive++
 	}
 
 	golog.Infof("total: %d, alive: %d, time: %v", total, alive, time.Since(start))

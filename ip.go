@@ -22,8 +22,7 @@ func readIPList() []string {
 }
 
 func getLocalIP() string {
-
-	conn, err := net.DialTimeout("udp", "114.114.114.114", 10*time.Second)
+	conn, err := net.DialTimeout("udp", "114.114.114.114:53", 10*time.Second)
 	if err != nil {
 		golog.Fatalf("failed to get local IP address: %v", err)
 	}
@@ -36,10 +35,15 @@ func getLocalIP() string {
 }
 
 func cidr2IPList(cidr string) []string {
+	if cidr == "" {
+		return nil
+	}
+
 	var ips []string
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		golog.Fatal(err)
+		golog.Errorf("failed to parse CIDR %s: %v", cidr, err)
+		return nil
 	}
 	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); ip = incIP(ip) {
 		ips = append(ips, ip.String())

@@ -3,7 +3,7 @@ package main
 import (
 	"net"
 	"os"
-	"sync"
+	"time"
 
 	"github.com/kataras/golog"
 	log "github.com/kataras/golog"
@@ -12,40 +12,43 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+const (
+	protocolICMP = 1
+)
+
 type ICMPScanner struct {
-	src         net.IP
-	wg          *sync.WaitGroup
-	concurrency int
+	src net.IP
+
+	input  chan []string
+	output chan string
 }
 
-func NewICMPScanner(localIP string, concurrency int, wg *sync.WaitGroup) *ICMPScanner {
+// 调大缓存区
+// sysctl net.core.rmem_max
+// sysctl net.core.wmem_max
+
+func NewICMPScanner(input chan []string, output chan string) *ICMPScanner {
+	localIP := getLocalIP()
 	s := &ICMPScanner{
-		src:         net.ParseIP(localIP),
-		concurrency: concurrency,
-		wg:          wg,
+		input:  input,
+		output: output,
+		src:    net.ParseIP(localIP),
 	}
 	return s
 }
 
-func (s *ICMPScanner) Scan(input chan []string) (output chan string) {
-	output = make(chan string, 1024*1024)
-	// go s.recv(output)
-
-	for i := 0; i < s.concurrency; i++ {
-		go s.send(input)
-	}
-
-	return output
-}
-
-// Close closes the pcap handle.
-func (s *ICMPScanner) Close() {
-
+func (s *ICMPScanner) Scan() {
+	go s.recv()
+	go s.send(s.input)
 }
 
 // send sends a single ICMP echo request packet for each ip in the input channel.
 func (s *ICMPScanner) send(input chan []string) error {
-	defer s.wg.Done()
+	defer func() {
+		time.Sleep(5 * time.Second)
+		close(s.output)
+		golog.Infof("send goroutine exit")
+	}()
 
 	id := os.Getpid() & 0xffff
 
@@ -56,11 +59,10 @@ func (s *ICMPScanner) send(input chan []string) error {
 	}
 	defer conn.Close()
 
-	pconn := ipv4.NewPacketConn(conn)
 	// 不负责接收数据
 	filter := createEmptyFilter()
 	if assembled, err := bpf.Assemble(filter); err == nil {
-		pconn.SetBPF(assembled)
+		conn.IPv4PacketConn().SetBPF(assembled)
 	}
 
 	seq := uint16(0)
@@ -96,4 +98,46 @@ func (s *ICMPScanner) send(input chan []string) error {
 	}
 
 	return nil
+}
+
+// recv receives ICMP echo reply packets and sends the source IP to the output channel.
+func (s *ICMPScanner) recv() error {
+	defer recover()
+
+	id := os.Getpid() & 0xffff
+
+	// 创建 ICMP 连接
+	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	// 接收 ICMP 报文
+	reply := make([]byte, 1500)
+	for {
+		n, peer, err := conn.ReadFrom(reply)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// 解析 ICMP 报文
+		msg, err := icmp.ParseMessage(protocolICMP, reply[:n])
+		if err != nil {
+			golog.Errorf("failed to parse ICMP message: %v", err)
+			continue
+		}
+
+		// 打印结果
+		switch msg.Type {
+		case ipv4.ICMPTypeEchoReply:
+			echoReply, ok := msg.Body.(*icmp.Echo)
+			if !ok {
+				continue
+			}
+			if echoReply.ID == id {
+				s.output <- peer.String()
+			}
+		}
+	}
 }
