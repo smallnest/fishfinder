@@ -18,11 +18,11 @@ type TCPScanner struct {
 	src     net.IP
 	srcPort int
 	dstPort int
-	input   chan []string
+	input   chan string
 	output  chan string
 }
 
-func NewTCPScanner(srcPort, dstPort int, input chan []string, output chan string) *TCPScanner {
+func NewTCPScanner(srcPort, dstPort int, input chan string, output chan string) *TCPScanner {
 	localIP := GetLocalIP()
 	s := &TCPScanner{
 		input:   input,
@@ -39,7 +39,7 @@ func (s *TCPScanner) Scan() {
 	go s.send(s.input)
 }
 
-func (s *TCPScanner) send(input chan []string) error {
+func (s *TCPScanner) send(input chan string) error {
 	defer func() {
 		time.Sleep(5 * time.Second)
 		close(s.output)
@@ -61,36 +61,35 @@ func (s *TCPScanner) send(input chan []string) error {
 	}
 
 	seq := uint32(os.Getpid())
-	for ips := range input {
-		for _, ip := range ips {
-			dst, err := net.ResolveIPAddr("ip", ip)
-			if err != nil {
-				golog.Fatalf("failed to resolve IP address: %v", err)
-			}
+	for ip := range input {
+		dstIP := net.ParseIP(ip)
+		if dstIP == nil {
+			golog.Errorf("failed to resolve IP address %s", ip)
+			continue
+		}
 
-			// 构造 TCP SYN 包
-			tcpHeader := &TCPHeader{
-				Source:      uint16(s.srcPort), // 源端口
-				Destination: uint16(s.dstPort), // 目标端口(这里探测80端口)
-				SeqNum:      seq,
-				AckNum:      0,
-				Flags:       0x002, // SYN
-				Window:      65535,
-				Checksum:    0,
-				Urgent:      0,
-			}
+		// 构造 TCP SYN 包
+		tcpHeader := &TCPHeader{
+			Source:      uint16(s.srcPort), // 源端口
+			Destination: uint16(s.dstPort), // 目标端口(这里探测80端口)
+			SeqNum:      seq,
+			AckNum:      0,
+			Flags:       0x002, // SYN
+			Window:      65535,
+			Checksum:    0,
+			Urgent:      0,
+		}
 
-			// 计算校验和
-			tcpHeader.Checksum = tcpChecksum(tcpHeader, s.src, dst.IP)
+		// 计算校验和
+		tcpHeader.Checksum = tcpChecksum(tcpHeader, s.src, dstIP)
 
-			// 序列化 TCP 头
-			packet := tcpHeader.Marshal()
+		// 序列化 TCP 头
+		packet := tcpHeader.Marshal()
 
-			// 发送 TCP SYN 包
-			_, err = conn.WriteTo(packet, dst)
-			if err != nil {
-				golog.Errorf("failed to send TCP packet: %v", err)
-			}
+		// 发送 TCP SYN 包
+		_, err = conn.WriteTo(packet, &net.IPAddr{IP: dstIP})
+		if err != nil {
+			golog.Errorf("failed to send TCP packet: %v", err)
 		}
 	}
 

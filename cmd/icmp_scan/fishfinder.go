@@ -29,7 +29,7 @@ func main() {
 	start := time.Now()
 	// 将待探测的IP发送给send goroutine
 	go func() {
-		lines := fishfinding.ReadIPList()
+		lines := fishfinding.ReadIPList("../../config/ipv4.txt")
 		for _, line := range lines {
 			ips := fishfinding.Cidr2IPList(line)
 			input <- ips

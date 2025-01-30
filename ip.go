@@ -10,9 +10,9 @@ import (
 	"golang.org/x/net/bpf"
 )
 
-func ReadIPList() []string {
-	golog.Info("reading ipv4.txt")
-	data, err := os.ReadFile("ipv4.txt")
+func ReadIPList(fileName string) []string {
+	golog.Info("reading " + fileName)
+	data, err := os.ReadFile(fileName)
 	if err != nil {
 		golog.Fatal(err)
 	}
@@ -21,9 +21,9 @@ func ReadIPList() []string {
 	return strings.Split(string(data), "\n")
 }
 
-func ReadAvailableIPList() []string {
-	golog.Info("reading ip.txt")
-	data, err := os.ReadFile("ip.txt")
+func ReadAvailableIPList(fileName string) []string {
+	golog.Info("reading " + fileName)
+	data, err := os.ReadFile(fileName)
 	if err != nil {
 		golog.Fatal(err)
 	}

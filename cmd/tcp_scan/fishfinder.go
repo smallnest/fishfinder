@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ var (
 func main() {
 	flag.Parse()
 
-	input := make(chan []string, 1024)
+	input := make(chan string, 1024)
 	output := make(chan string, 1024)
 	scanner := fishfinding.NewTCPScanner(*srcPort, *dstPort, input, output) // 改用 TCP 扫描器
 
@@ -32,7 +33,7 @@ func main() {
 	start := time.Now()
 	// 将待探测的IP发送给send goroutine
 	go func() {
-		lines := fishfinding.ReadAvailableIPList()
+		lines := fishfinding.ReadAvailableIPList("../../config/ip.txt")
 		for _, line := range lines {
 			// [INFO] 2025/01/26 20:58 1.27.222.121 is alive
 			items := strings.Fields(line)
@@ -41,9 +42,10 @@ func main() {
 			}
 			line := items[3]
 
-			ips := fishfinding.Cidr2IPList(line)
-			input <- ips
-			total += len(ips)
+			fmt.Println(line)
+
+			input <- line
+			total++
 		}
 		close(input)
 	}()
