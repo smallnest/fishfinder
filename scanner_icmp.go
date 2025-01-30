@@ -1,4 +1,4 @@
-package main
+package fishfinding
 
 import (
 	"net"
@@ -28,7 +28,7 @@ type ICMPScanner struct {
 // sysctl net.core.wmem_max
 
 func NewICMPScanner(input chan []string, output chan string) *ICMPScanner {
-	localIP := getLocalIP()
+	localIP := GetLocalIP()
 	s := &ICMPScanner{
 		input:  input,
 		output: output,

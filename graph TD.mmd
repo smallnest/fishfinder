@@ -1,0 +1,26 @@
+graph TD
+    A[开始] --> B[解析命令行参数]
+    B --> C[创建 WaitGroup]
+    C --> D[创建 ICMPScanner]
+    D --> E[创建输入通道 input]
+    
+    E --> F1[goroutine 1: 读取 IP 列表] & F2[goroutine 2: 扫描] & F3[goroutine 3: 等待结果]
+    
+    F1 --> G1[读取 ipv4.txt]
+    G1 --> H1[转换 CIDR 为 IP 列表]
+    H1 --> I1[发送到 input 通道]
+    I1 --> J1[关闭 input 通道]
+    
+    F2 --> G2[启动多个发送协程]
+    G2 --> H2[发送 ICMP 请求]
+    
+    F3 --> G3[等待所有发送协程完成]
+    G3 --> H3[等待5秒]
+    H3 --> I3[关闭 done 通道]
+    
+    J1 & H2 & I3 --> K[主循环接收结果]
+    K --> L{检查是否完成}
+    L -->|未完成| M[记录存活 IP]
+    M --> K
+    L -->|完成| N[输出统计信息]
+    N --> O[结束]

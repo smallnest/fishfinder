@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kataras/golog"
+	"github.com/smallnest/fishfinding"
 )
 
 var (
@@ -18,7 +19,7 @@ func main() {
 
 	input := make(chan []string, 1024)
 	output := make(chan string, 1024)
-	scanner := NewICMPScanner(input, output)
+	scanner := fishfinding.NewICMPScanner(input, output)
 
 	var total int
 	var alive int
@@ -28,9 +29,9 @@ func main() {
 	start := time.Now()
 	// 将待探测的IP发送给send goroutine
 	go func() {
-		lines := readIPList()
+		lines := fishfinding.ReadIPList()
 		for _, line := range lines {
-			ips := cidr2IPList(line)
+			ips := fishfinding.Cidr2IPList(line)
 			input <- ips
 			total += len(ips)
 		}

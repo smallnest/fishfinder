@@ -1,4 +1,4 @@
-package main
+package fishfinding
 
 import (
 	"net"
@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/bpf"
 )
 
-func readIPList() []string {
+func ReadIPList() []string {
 	golog.Info("reading ipv4.txt")
 	data, err := os.ReadFile("ipv4.txt")
 	if err != nil {
@@ -21,7 +21,18 @@ func readIPList() []string {
 	return strings.Split(string(data), "\n")
 }
 
-func getLocalIP() string {
+func ReadAvailableIPList() []string {
+	golog.Info("reading ip.txt")
+	data, err := os.ReadFile("ip.txt")
+	if err != nil {
+		golog.Fatal(err)
+	}
+
+	golog.Info("splitting the IPs")
+	return strings.Split(string(data), "\n")
+}
+
+func GetLocalIP() string {
 	conn, err := net.DialTimeout("udp", "114.114.114.114:53", 10*time.Second)
 	if err != nil {
 		golog.Fatalf("failed to get local IP address: %v", err)
@@ -34,7 +45,7 @@ func getLocalIP() string {
 	return host
 }
 
-func cidr2IPList(cidr string) []string {
+func Cidr2IPList(cidr string) []string {
 	if cidr == "" {
 		return nil
 	}
