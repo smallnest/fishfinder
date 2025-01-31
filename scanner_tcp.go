@@ -100,17 +100,25 @@ func (s *TCPScanner) recv() error {
 	defer recover()
 
 	// 创建原始套接字
-	conn, err := net.ListenPacket("ip4:tcp", s.src.To4().String())
+	conn, err := net.ListenIP("ip4:tcp", &net.IPAddr{IP: s.src})
 	if err != nil {
 		golog.Fatal(err)
 	}
 	defer conn.Close()
 
+	pconn := ipv4.NewPacketConn(conn)
+	if err := pconn.SetControlMessage(ipv4.FlagSrc|ipv4.FlagDst|ipv4.FlagInterface, true); err != nil {
+		golog.Fatalf("set control message error: %v\n", err)
+	}
+
+	seq := uint32(os.Getpid()) + 1
+
 	buf := make([]byte, 1024)
 	for {
 		n, peer, err := conn.ReadFrom(buf)
 		if err != nil {
-			golog.Fatal(err)
+			golog.Errorf("failed to read: %v", err)
+			continue
 		}
 
 		if n < tcpHeaderLength {
@@ -120,8 +128,14 @@ func (s *TCPScanner) recv() error {
 		// 解析 TCP 头
 		tcpHeader := ParseTCPHeader(buf[:n])
 
+		if tcpHeader.Destination != uint16(s.srcPort) || tcpHeader.Source != uint16(s.dstPort) {
+			continue
+		}
+
+		// golog.Info("peer: %s, flags: %d", peer.String(), tcpHeader.Flags)
+
 		// 检查是否是 SYN+ACK, 同时检查ACK是否和发送的seq对应
-		if tcpHeader.Flags == 0x012 && tcpHeader.AckNum == tcpHeader.SeqNum+1 { // SYN + ACK
+		if tcpHeader.Flags == 0x012 && tcpHeader.AckNum == seq { // SYN + ACK
 			s.output <- peer.String()
 		}
 	}
@@ -184,8 +198,58 @@ func ParseTCPHeader(data []byte) *TCPHeader {
 	return header
 }
 
+// TCP 伪头部结构，用于校验和计算
+type TCPPseudoHeader struct {
+	SrcIP     [4]byte
+	DstIP     [4]byte
+	Zero      byte
+	Protocol  byte
+	TCPLength uint16
+}
+
 func tcpChecksum(header *TCPHeader, srcIP, dstIP net.IP) uint16 {
-	// TCP 校验和计算实现
-	// ... 校验和计算逻辑 ...
-	return 0
+	// 创建伪头部
+	pseudo := TCPPseudoHeader{
+		Protocol:  6, // TCP protocol number
+		TCPLength: tcpHeaderLength,
+	}
+	copy(pseudo.SrcIP[:], srcIP.To4())
+	copy(pseudo.DstIP[:], dstIP.To4())
+
+	// 序列化 TCP 头
+	tcpData := header.Marshal()
+
+	// 计算总长度并创建缓冲区
+	totalLen := uint32(len(tcpData)) + 12 // 12 是伪头部长度
+	buf := make([]byte, totalLen)
+
+	// 复制伪头部数据
+	copy(buf[0:4], pseudo.SrcIP[:])
+	copy(buf[4:8], pseudo.DstIP[:])
+	buf[8] = pseudo.Zero
+	buf[9] = pseudo.Protocol
+	buf[10] = byte(pseudo.TCPLength >> 8)
+	buf[11] = byte(pseudo.TCPLength)
+
+	// 复制 TCP 头数据
+	copy(buf[12:], tcpData)
+
+	// 计算校验和
+	var sum uint32
+	for i := 0; i < len(buf)-1; i += 2 {
+		sum += uint32(buf[i])<<8 | uint32(buf[i+1])
+	}
+
+	// 如果长度为奇数，处理最后一个字节
+	if len(buf)%2 == 1 {
+		sum += uint32(buf[len(buf)-1]) << 8
+	}
+
+	// 将高16位加到低16位
+	for sum>>16 != 0 {
+		sum = (sum & 0xffff) + (sum >> 16)
+	}
+
+	// 返回校验和的反码
+	return ^uint16(sum)
 }

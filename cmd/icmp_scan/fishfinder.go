@@ -8,12 +8,6 @@ import (
 	"github.com/smallnest/fishfinding"
 )
 
-var (
-	protocol = flag.String("p", "icmp", "The protocol to use (icmp, tcp or udp)")
-)
-
-// 嵌入ip.sh
-
 func main() {
 	flag.Parse()
 

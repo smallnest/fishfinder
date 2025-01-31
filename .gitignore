@@ -26,3 +26,12 @@ go.work.sum
 
 ip.txt
 ip2.txt
+
+cmd/tcp_scan/tcp_scan
+cmd/icmp_scan/icmp_scan
+cmd/clickhouse/clickhouse
+config/port9000.txt
+config/clickhouse.txt
+
+
+

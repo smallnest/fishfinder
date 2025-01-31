@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,12 +10,9 @@ import (
 )
 
 var (
-	protocol = flag.String("p", "icmp", "The protocol to use (icmp, tcp or udp)")
-	srcPort  = flag.Int("s", 12345, "The source port to use")
-	dstPort  = flag.Int("d", 9000, "The destination port to use")
+	srcPort = flag.Int("s", 12345, "The source port to use")
+	dstPort = flag.Int("d", 9000, "The destination port to use")
 )
-
-// 嵌入ip.sh
 
 func main() {
 	flag.Parse()
@@ -37,13 +33,10 @@ func main() {
 		for _, line := range lines {
 			// [INFO] 2025/01/26 20:58 1.27.222.121 is alive
 			items := strings.Fields(line)
-			if len(items) < 6 {
+			if len(items) != 6 {
 				continue
 			}
 			line := items[3]
-
-			fmt.Println(line)
-
 			input <- line
 			total++
 		}

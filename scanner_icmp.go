@@ -70,7 +70,8 @@ func (s *ICMPScanner) send(input chan []string) error {
 		for _, ip := range ips {
 			dst, err := net.ResolveIPAddr("ip", ip)
 			if err != nil {
-				golog.Fatalf("failed to resolve IP address: %v", err)
+				golog.Errorf("failed to resolve IP address: %v", err)
+				continue
 			}
 
 			// 构造 ICMP 报文
